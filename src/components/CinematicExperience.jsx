@@ -63,17 +63,19 @@ export default function CinematicExperience() {
     const loadedImages = [];
     let loadedCount = 0;
 
+    const handleLoad = () => {
+      loadedCount++;
+      if (loadedCount === frameCount) {
+        setLoaded(true);
+      }
+    };
+
     for (let i = 1; i <= frameCount; i++) {
       const img = new Image();
       const fileName = String(i).padStart(3, "0");
       img.src = `/frames/ezgif-frame-${fileName}.jpg`;
 
-      img.onload = () => {
-        loadedCount++;
-        if (loadedCount === frameCount) {
-          setLoaded(true);
-        }
-      };
+      img.onload = handleLoad;
 
       img.onerror = () => {
         console.error("Failed to load frame:", `/frames/ezgif-frame-${fileName}.jpg`);
