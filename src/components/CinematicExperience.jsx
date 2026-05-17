@@ -6,7 +6,21 @@ export default function CinematicExperience() {
   const canvasRef = useRef(null);
   const frameCount = 240;
   const images = useRef([]);
-  const [loaded, setLoaded] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const loaded = loadingProgress === 100;
+  const drawFrameRef = useRef(null);
+
+  // Lock scroll while loading
+  useEffect(() => {
+    if (loadingProgress < 100) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "auto";
+    }
+    return () => {
+      document.body.style.overflow = "auto";
+    };
+  }, [loadingProgress]);
 
   // Overall scroll progress for the 500vh sequence container
   const { scrollYProgress: sequenceProgress } = useScroll({
@@ -63,28 +77,31 @@ export default function CinematicExperience() {
     const loadedImages = [];
     let loadedCount = 0;
 
-    const handleLoad = () => {
-      loadedCount++;
-      if (loadedCount === frameCount) {
-        setLoaded(true);
-      }
-    };
-
     for (let i = 1; i <= frameCount; i++) {
       const img = new Image();
       const fileName = String(i).padStart(3, "0");
       img.src = `/frames/ezgif-frame-${fileName}.jpg`;
 
-      img.onload = handleLoad;
+      img.onload = () => {
+        loadedCount++;
+        setLoadingProgress(Math.floor((loadedCount / frameCount) * 100));
+
+        // If this image happens to be the current frame, draw it immediately
+        if (drawFrameRef.current && Math.floor(currentFrame.get()) === i - 1) {
+          drawFrameRef.current(currentFrame.get());
+        }
+      };
 
       img.onerror = () => {
         console.error("Failed to load frame:", `/frames/ezgif-frame-${fileName}.jpg`);
+        loadedCount++;
+        setLoadingProgress(Math.floor((loadedCount / frameCount) * 100));
       };
 
       loadedImages.push(img);
     }
     images.current = loadedImages;
-  }, []);
+  }, [currentFrame]);
 
   /*
     ==========================================
@@ -94,43 +111,81 @@ export default function CinematicExperience() {
   useEffect(() => {
     if (!loaded) return;
 
-    const unsubscribe = currentFrame.on("change", (latest) => {
+    const renderFrame = (latest) => {
       const frameIndex = Math.floor(latest);
       const canvas = canvasRef.current;
       if (!canvas) return;
 
       const context = canvas.getContext("2d");
       const img = images.current[frameIndex];
-      if (!img || !context) return;
+      
+      if (!img || !img.complete || img.naturalWidth === 0) return;
 
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      // Only update canvas dimensions if they changed to avoid clearing the canvas unnecessarily
+      if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+
       context.clearRect(0, 0, canvas.width, canvas.height);
       
       // Make the image cover the entire canvas (fullscreen)
       const scale = Math.max(
-         canvas.width / img.width,
-         canvas.height / img.height
+         canvas.width / img.naturalWidth,
+         canvas.height / img.naturalHeight
       );
 
-      const newWidth = img.width * scale;
-      const newHeight = img.height * scale;
+      const newWidth = img.naturalWidth * scale;
+      const newHeight = img.naturalHeight * scale;
 
       // Center the image
       const x = (canvas.width - newWidth) / 2;
       const y = (canvas.height - newHeight) / 2;
 
       context.drawImage(img, x, y, newWidth, newHeight);
-    });
+    };
+
+    drawFrameRef.current = renderFrame;
+
+    // Draw initially
+    renderFrame(currentFrame.get());
+
+    const unsubscribe = currentFrame.on("change", renderFrame);
 
     return () => unsubscribe();
   }, [loaded, currentFrame]);
 
   return (
-    <div className="relative">
-      {/* 
-        SEQUENCE 1: HERO & ROBOT CANVAS (Sticky Scroll)
-      */}
+    <>
+      {/* FULL SCREEN LOADER */}
+      {loadingProgress < 100 && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#040816] text-white">
+          <div className="relative mb-10 flex flex-col items-center">
+            <div className="absolute inset-0 bg-purple-500/20 blur-[120px] rounded-full scale-150" />
+            <img
+              src="https://iisppr.in/webimg/logo-removebg-preview_06272023080455.png"
+              alt="IISPPR Logo"
+              className="relative mx-auto w-[180px] md:w-[240px] object-contain drop-shadow-[0_0_70px_rgba(139,92,246,0.45)] mb-8 animate-pulse"
+            />
+          </div>
+          <h2 className="text-xl md:text-3xl font-bold mb-4 tracking-[0.2em] text-zinc-300">INITIALIZING</h2>
+          <div className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-cyan-400">
+            {loadingProgress}%
+          </div>
+          <div className="w-64 md:w-96 h-1 bg-white/10 mt-10 rounded-full overflow-hidden relative">
+            <div 
+              className="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-400 to-purple-500 shadow-[0_0_20px_rgba(34,211,238,0.5)] transition-all duration-300 ease-out" 
+              style={{ width: `${loadingProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* MAIN CONTENT */}
+      <div className={`relative transition-opacity duration-1000 ${loadingProgress < 100 ? 'opacity-0' : 'opacity-100'}`}>
+        {/* 
+          SEQUENCE 1: HERO & ROBOT CANVAS (Sticky Scroll)
+        */}
       <div ref={sequenceRef} className="relative h-[500vh]">
         <div className="sticky top-0 h-screen w-full overflow-hidden flex items-center justify-center">
           
@@ -304,5 +359,6 @@ export default function CinematicExperience() {
 
       </div>
     </div>
+    </>
   );
 }
