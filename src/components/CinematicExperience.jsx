@@ -77,26 +77,27 @@ export default function CinematicExperience() {
     const loadedImages = [];
     let loadedCount = 0;
 
+    const handleImageLoad = (i, fileName, isError) => {
+      loadedCount++;
+      setLoadingProgress(Math.floor((loadedCount / frameCount) * 100));
+
+      if (isError) {
+        console.error("Failed to load frame:", `/frames/ezgif-frame-${fileName}.jpg`);
+      } else {
+        // If this image happens to be the current frame, draw it immediately
+        if (drawFrameRef.current && Math.floor(currentFrame.get()) === i - 1) {
+          drawFrameRef.current(currentFrame.get());
+        }
+      }
+    };
+
     for (let i = 1; i <= frameCount; i++) {
       const img = new Image();
       const fileName = String(i).padStart(3, "0");
       img.src = `/frames/ezgif-frame-${fileName}.jpg`;
 
-      img.onload = () => {
-        loadedCount++;
-        setLoadingProgress(Math.floor((loadedCount / frameCount) * 100));
-
-        // If this image happens to be the current frame, draw it immediately
-        if (drawFrameRef.current && Math.floor(currentFrame.get()) === i - 1) {
-          drawFrameRef.current(currentFrame.get());
-        }
-      };
-
-      img.onerror = () => {
-        console.error("Failed to load frame:", `/frames/ezgif-frame-${fileName}.jpg`);
-        loadedCount++;
-        setLoadingProgress(Math.floor((loadedCount / frameCount) * 100));
-      };
+      img.onload = () => handleImageLoad(i, fileName, false);
+      img.onerror = () => handleImageLoad(i, fileName, true);
 
       loadedImages.push(img);
     }
